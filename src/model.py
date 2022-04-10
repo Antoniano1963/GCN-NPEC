@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from data import generate_data
 from encoder import GCN
-from decoder import DecoderCell, ClassificationDecoder
+from decoder import DecoderCell, ClassificationDecoder, SequencialDecoder
 
 # class AttentionModel(nn.Module):
 class Model(nn.Module):
@@ -13,24 +13,25 @@ class Model(nn.Module):
 		
 # 		self.Encoder = GraphAttentionEncoder(embed_dim, n_heads, n_encode_layers, FF_hidden)
 		self.Encoder = GCN(embed_dim, embed_dim, embed_dim, embed_dim, n_encode_layers, 5)
-		self.se_Decoder = DecoderCell(embed_dim, n_heads, tanh_clipping)
+		self.se_Decoder = SequencialDecoder(embed_dim, n_heads, tanh_clipping)
 		self.cl_Decoder = ClassificationDecoder(embed_dim)
 
 	def to_ground(self, pi):
 		with torch.no_grad():
 			n = len(pi)
-    # 		print(pi)
-    # 		print(pi.size(0))
 			dist = torch.zeros((n, 21, 21))
 			for num in range(pi.size(0)):      
 				for i in range(21 - 1):
-    # 				print(pi[num][i], pi[num][i+1])
 					dist[num][int(pi[num][i])][int(pi[num][i+1])] = 1
 			return dist
 		
-	def forward(self, x, return_pi = True, decode_type = 'greedy'):
+	def forward(self, x, return_pi=True, decode_type='greedy'):
 		node, e = self.Encoder(x)
-		se_decoder_output = self.se_Decoder(x, node, return_pi = True, decode_type = decode_type)
+		# node  node_embedding [batch, node_num + 1, hidden_dim]
+		# edge edge_embedding [batch, node_num +1, node_num + 1, hidden_dim]
+		# 这里的x是原始输入
+		# se_decoder_output = self.se_Decoder(x, node, return_pi=True, decode_type=decode_type)
+		se_decoder_output = self.se_Decoder(x, node, return_pi=True, decode_type=decode_type)
 		cl_decoder_output = self.cl_Decoder(e)
 		cost, ll, pi = se_decoder_output
 		ground = self.to_ground(pi)

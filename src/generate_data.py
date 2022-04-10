@@ -50,15 +50,15 @@ def get_dist(n1, n2):
 		return math.sqrt(pow(x2-x1,2)+pow(y2-y1,2))
 	else:
 		raise TypeError
-
-delta = 0.1
-graph = np.random.rand(50000, 21, 2)
-dist = np.zeros((50000, 21, 21))
-for i in range(50000):
-    for j in range(21):
-        for k in range(21):
-            dist[i][j][k] = get_dist(graph[i][j], graph[i][k]) #+ 0.1 * np.random.randn(1)
-demand = np.random.rand(50000, 20)
-depot_demand = np.zeros((50000,1))
-demand = np.concatenate((depot_demand, demand), axis = 1)
-np.savez('my-20-training.npz', graph = graph, demand = demand, dis = dist)
+if __name__ == "__main__":
+    delta = 0.1
+    graph = np.random.rand(50000, 21, 2)
+    dist = np.zeros((50000, 21, 21))
+    for i in range(50000):
+        for j in range(21):
+            for k in range(21):
+                dist[i][j][k] = get_dist(graph[i][j], graph[i][k]) #+ 0.1 * np.random.randn(1)
+    demand = np.random.rand(50000, 20)
+    depot_demand = np.zeros((50000,1))
+    demand = np.concatenate((depot_demand, demand), axis = 1)
+    np.savez('../tc/my-20-training.npz', graph = graph, demand = demand, dis = dist)

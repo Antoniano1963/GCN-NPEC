@@ -61,15 +61,16 @@ class Env():
 			prev_node_embedding: (batch, 1, embed_dim)
 			context: (batch, 1, embed_dim+1)
 		"""
-		one_hot = torch.eye(self.n_nodes)[next_node]		
+		one_hot = torch.eye(self.n_nodes)[next_node]
+		# one hot [batch, 1, node_num]
 		visited_mask = one_hot.type(torch.bool).permute(0,2,1).to(self.device)
-
+		#  [batch, node_num, 1] True/False
 		mask, D = self.get_mask_D(next_node, visited_mask, D)
 		self.demand = self.demand.masked_fill(self.visited_customer[:,:,0] == True, 0.0)
 		
 		prev_node_embedding = torch.gather(input = self.node_embeddings, dim = 1, index = next_node[:,:,None].repeat(1,1,self.embed_dim))
 		# prev_node_embedding = torch.gather(input = self.node_embeddings, dim = 1, index = next_node[:,:,None].expand(self.batch,1,self.embed_dim))
-
+		# [batch,1,hidden_dum]
 		step_context = torch.cat([prev_node_embedding, D[:,:,None]], dim = -1)
 		return mask, step_context, D
 

@@ -98,10 +98,50 @@ class MultiHeadAttention(nn.Module):
 			Q, K, V = self.Wq(Q), self.Wk(K), self.Wv(V)
 		Q, K, V = list(map(self.split_heads, [Q, K, V]))
 		output = self.attention([Q, K, V], mask = mask)
+		#这里它使用自定义的函数实现了公式16
 		output = self.combine_heads(output)
 		if self.need_W:
 			return self.Wout(output)
 		return output
+
+
+class AttentionPointer(nn.Module):
+	def __init__(self, hidden_dim, use_tanh=False, use_cuda=False):
+		super(AttentionPointer, self).__init__()
+		self.hidden_dim = hidden_dim
+		self.use_tanh = use_tanh
+
+		self.project_hidden = nn.Linear(hidden_dim, hidden_dim)
+		self.project_x = nn.Conv1d(hidden_dim, hidden_dim, 1, 1)
+		self.C = 10
+		self.tanh = nn.Tanh()
+
+		v = torch.FloatTensor(hidden_dim)
+		if use_cuda:
+			v = v.cuda()
+		self.v = nn.Parameter(v)
+		self.v.data.uniform_(-(1. / math.sqrt(hidden_dim)) , 1. / math.sqrt(hidden_dim))
+
+	def forward(self, hidden, x):
+		'''
+		@param hidden: (batch_size, hidden_dim)
+		@param x: (node_num, batch_size, hidden_dim)
+		'''
+		x = x.permute(1, 2, 0)
+		q = self.project_hidden(hidden).unsqueeze(2)  # batch_size x hidden_dim x 1
+		e = self.project_x(x)  # batch_size x hidden_dim x node_num
+		# expand the hidden by node_num
+		# batch_size x hidden_dim x node_num
+		expanded_q = q.repeat(1, 1, e.size(2))
+		# batch x 1 x hidden_dim
+		v_view = self.v.unsqueeze(0).expand(expanded_q.size(0), len(self.v)).unsqueeze(1)
+		# (batch_size x 1 x hidden_dim) * (batch_size x hidden_dim x node_num)
+		u = torch.bmm(v_view, self.tanh(expanded_q + e)).squeeze(1)
+		if self.use_tanh:
+			logits = self.C * self.tanh(u)
+		else:
+			logits = u
+		return e, logits
 
 if __name__ == '__main__':
 	mha = MultiHeadAttention(n_heads = 8, embed_dim = 128, need_W = True)

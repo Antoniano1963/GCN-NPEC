@@ -34,7 +34,7 @@ def train(cfg, log_path = None):
 		for t, inputs in enumerate(dataloader):
 			
 			# loss, L_mean = rein_loss(model, inputs, bs, t, device)
-			L, ll, pi, groud_mat, pre_mat = model(inputs, decode_type = 'sampling')
+			L, ll, pi, groud_mat, pre_mat = model(inputs, decode_type='sampling')
 # 			L, ll, pi, groud_mat, pre_mat = model(inputs, decode_type = 'sampling')
 			predict_matrix = pre_mat.view(-1, 2).cuda()
 			solution_matrix = groud_mat.view(-1).long().cuda()
