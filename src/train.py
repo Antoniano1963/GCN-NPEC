@@ -31,7 +31,7 @@ def train(cfg, log_path = None):
 		bs = bs.view(-1, cfg.batch) if bs is not None else None# bs: (cfg.batch_steps, cfg.batch) or None
 		
 		dataloader = DataLoader(dataset, batch_size = cfg.batch, shuffle = True)
-		for t, inputs in enumerate(dataloader):
+		for t, inputs in enumerate(tqdm(dataloader)):
 			
 			# loss, L_mean = rein_loss(model, inputs, bs, t, device)
 			L, ll, pi, groud_mat, pre_mat = model(inputs, decode_type='sampling')
@@ -58,8 +58,8 @@ def train(cfg, log_path = None):
 			
 			if t%(cfg.batch_verbose) == 0:
 				t2 = time()
-				print('Epoch %d (batch = %d): Loss: %1.3f L: %1.3f, %dmin%dsec'%(
-					epoch, t, ave_loss/(t+1), ave_L/(t+1), (t2-t1)//60, (t2-t1)%60))
+				print('Epoch %d (batch = %d): se_Loss: %1.3f class_Loss: %1.3f L: %1.3f, %dmin%dsec'%(
+					epoch, t, ave_loss/(t+1), ave_L/(t+1), classification_loss/(t+1), (t2-t1)//60, (t2-t1)%60))
 				if cfg.islogger:
 					if log_path is None:
 						log_path = '%s%s_%s.csv'%(cfg.log_dir, cfg.task, cfg.dump_date)#cfg.log_dir = ./Csv/

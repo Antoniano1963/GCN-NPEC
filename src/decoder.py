@@ -114,39 +114,11 @@ class SequencialDecoder(nn.Module):
 		self.Wout = nn.Linear(embed_dim, embed_dim, bias=False)
 		self.Wq_step = nn.Linear(embed_dim + 1, embed_dim, bias=False)
 		self.gru = nn.GRU(embed_dim + 1, embed_dim, num_layers=2)
-
-		self.MHA = MultiHeadAttention(n_heads=n_heads, embed_dim=embed_dim, need_W=False)
-		self.SHA = DotProductAttention(clip=clip, return_logits=True, head_depth=embed_dim)
 		self.pointer = AttentionPointer(embed_dim, use_tanh=True, use_cuda=True)
 		self.embed_dim = embed_dim
 		# SHA ==> Single Head Attention, because this layer n_heads = 1 which means no need to spilt heads
 		self.env = Env
 		self.softmax = nn.Softmax(dim=1)
-
-	def compute_static(self, node_embeddings, graph_embedding):
-		# 我才是把固定不动的元素计算出来，但是没看懂为啥这么多
-		self.Q_fixed = self.Wq_fixed(graph_embedding[:, None, :])
-		# [batch, 1, hidden_dum]
-		self.K1 = self.Wk1(node_embeddings)
-		self.V = self.Wv(node_embeddings)
-		self.K2 = self.Wk2(node_embeddings)
-
-	def compute_dynamic(self, mask, step_context):
-		Q_step = self.Wq_step(step_context)
-		# [batch, 1, hidden_dim]
-		Q1 = self.Q_fixed + Q_step
-		# [batch, 1, hidden_dim]
-		# 这里是公式16的W部分，为了简化计算，因为参数一样，一部分计算可以重复利用
-		# 这里的K和V是node节点的embbedding，这里参数相同所以可以服用
-		Q2 = self.MHA([Q1, self.K1, self.V], mask=mask)
-		# [batch, 1, hidden_dim]
-		# 用了自己定义的MHA,还要看，哭
-		Q2 = self.Wout(Q2)
-		logits = self.SHA([Q2, self.K2, None], mask=mask)
-		# [batch, 1, node_num]
-		# print(logits[0, 0, :])
-		# 日了，这个模型和他说得也不是完全一样呀。。。
-		return logits.squeeze(dim=1)
 
 	def forward(self, x, encoder_output, return_pi=False, decode_type='sampling'):
 		# x 四部分组成， depot, demand, cur_position, edges

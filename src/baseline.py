@@ -85,7 +85,7 @@ class RolloutBaseline:
 		
 		self.model = self.model.to(self.device)
 		# We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
-		self.dataset = Generator(self.device, n_samples = self.n_rollout_samples, n_customer = self.n_customer)
+		self.dataset = Generator(self.device, n_samples=self.n_rollout_samples, n_customer=self.n_customer)
 
 		print(f'Evaluating baseline model on baseline dataset (epoch = {epoch})')
 		self.bl_vals = self.rollout(self.model, self.dataset).cpu().numpy()
@@ -125,7 +125,7 @@ class RolloutBaseline:
 		if self.alpha < 1:
 			return None
 
-		val_costs = self.rollout(self.model, dataset, batch = 2048)
+		val_costs = self.rollout(self.model, dataset, batch = 1024)
 
 		return val_costs
 
@@ -159,22 +159,16 @@ class RolloutBaseline:
 		new_model = copy.deepcopy(model)
 		return new_model
 
-	def rollout(self, model, dataset, batch = 1000, disable_tqdm = False):
+	def rollout(self, model, dataset, batch=512, disable_tqdm=False):
 		costs_list = []
-		dataloader = DataLoader(dataset, batch_size = batch)
-		for inputs in tqdm(dataloader, disable = disable_tqdm, desc = 'Rollout greedy execution'):
+		dataloader = DataLoader(dataset, batch_size=batch)
+		for inputs in tqdm(dataloader, disable=disable_tqdm, desc='Rollout greedy execution'):
 			with torch.no_grad():
 				# ~ inputs = list(map(lambda x: x.to(self.device), inputs))
-				cost, _, _, _, _ = model(inputs, decode_type = 'greedy')
+				cost, _, _, _, _ = model(inputs, decode_type='greedy')
 				# costs_list.append(cost.data.cpu())
 				costs_list.append(cost)
 		return torch.cat(costs_list, 0)
 
 
-# def validate(dataset, model, batch = 1000):
-# 	"""Validates model on given dataset in greedy mode
-# 	"""
-# 	val_costs = rollout(model, dataset, batch = batch)
-# 	mean_cost = val_costs.mean()
-# 	print(f"Validation score: {np.round(mean_cost, 4)}")
-# 	return mean_cost
+

@@ -1,3 +1,4 @@
+import math
 
 import torch
 import numpy as np
@@ -5,6 +6,7 @@ import os
 from tqdm import tqdm
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
+import ctypes
 
 CAPACITIES = {10: 20., 20: 30., 50: 40., 100: 50.}
 
@@ -18,30 +20,57 @@ CAPACITIES = {10: 20., 20: 30., 50: 40., 100: 50.}
 # 		raise TypeError
 
 
+def get_dist(n1, n2):
+	x1,y1,x2,y2 = n1[0],n1[1],n2[0],n2[1]
+	if isinstance(n1, torch.Tensor):
+		return torch.sqrt((x2-x1).pow(2)+(y2-y1).pow(2))
+	elif isinstance(n1, (list, np.ndarray)):
+		return math.sqrt(pow(x2-x1,2)+pow(y2-y1,2))
+	else:
+		raise TypeError
+
 def generate_data(device, n_samples = 10, n_customer = 20, seed = None):
 	""" https://pytorch.org/docs/master/torch.html?highlight=rand#torch.randn
 		x[0] -- depot_xy: (batch, 2)
 		x[1] -- customer_xy: (batch, n_nodes-1, 2)
 		x[2] -- demand: (batch, n_nodes-1)
-        x[3] -- dist
+		x[3] -- dist
 	"""
-# 	if seed is not None:
-# 		torch.manual_seed(seed)
-	
-# 	return (torch.rand((n_samples, 2), device = device),
-# 			torch.rand((n_samples, n_customer, 2), device = device),
-# 			torch.randint(size = (n_samples, n_customer), low = 1, high = 10, device = device) / CAPACITIES[n_customer])
-# 	g20_train = np.load('My-20-training.npz')
-	g20_train = np.load('../tc/my-20-training.npz')
-	depot_xy = g20_train['graph'][0:n_samples, 0, :]
-	customer_xy = g20_train['graph'][0:n_samples, 1:21, :]
-	demand = g20_train['demand'][0:n_samples:, 1:21]
-	dist = g20_train['dis'][0:n_samples]
-	return (torch.tensor(np.expand_dims(np.array(depot_xy), axis = 0), dtype = torch.float).squeeze(0), 
-			torch.tensor(np.expand_dims(np.array(customer_xy), axis = 0), dtype = torch.float).squeeze(0), 
-			torch.tensor(np.expand_dims(np.array(demand), axis = 0), dtype = torch.float).squeeze(0),
-            torch.tensor(np.expand_dims(np.array(dist), axis = 0), dtype = torch.float).squeeze(0))
-	
+
+	graph = np.random.rand(n_samples, n_customer + 1, 2)
+	dist = np.zeros((n_samples, n_customer + 1, n_customer + 1))
+	# dll = ctypes.cdll.LoadLibrary('./Floyd.so')
+	# graph_c = graph.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+	# dist_c = dist.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+	# dll.FloydAlgorithm(graph_c, n_samples, n_customer + 1, dist_c)
+	for i in range(n_samples):
+		for j in range(n_customer + 1):
+			for k in range(n_customer + 1):
+				dist[i][j][k] = get_dist(graph[i][j], graph[i][k])
+	CAPACITIES = {
+		10: 20.,
+		20: 30.,
+		50: 40.,
+		100: 50.
+	}
+	depot_xy = graph[0:n_samples, 0, :]
+	customer_xy = graph[0:n_samples, 1:21, :]
+	# demand = demand[0:n_samples:, 1:21]
+	dist = dist[0:n_samples]
+	return (torch.tensor(np.expand_dims(np.array(depot_xy), axis=0), dtype=torch.float).squeeze(0),
+		torch.tensor(np.expand_dims(np.array(customer_xy), axis=0), dtype=torch.float).squeeze(0),
+		(torch.FloatTensor(n_samples, n_customer).uniform_(0, 9).int() + 1).float() / CAPACITIES[n_customer],
+		torch.tensor(np.expand_dims(np.array(dist), axis=0), dtype=torch.float).squeeze(0))
+	# g20_train = np.load('../tc/my-20-training.npz')
+	# depot_xy = g20_train['graph'][0:n_samples, 0, :]
+	# customer_xy = g20_train['graph'][0:n_samples, 1:21, :]
+	# demand = g20_train['demand'][0:n_samples:, 1:21]
+	# dist = g20_train['dis'][0:n_samples]
+	# return (torch.tensor(np.expand_dims(np.array(depot_xy), axis = 0), dtype = torch.float).squeeze(0),
+	# 		torch.tensor(np.expand_dims(np.array(customer_xy), axis = 0), dtype = torch.float).squeeze(0),
+	# 		torch.tensor(np.expand_dims(np.array(demand), axis = 0), dtype = torch.float).squeeze(0),
+	#         torch.tensor(np.expand_dims(np.array(dist), axis = 0), dtype = torch.float).squeeze(0))
+
 
 
 class Generator(Dataset):
@@ -91,9 +120,7 @@ def data_from_txt(path):
 				else:
 					demand.append(list(map(lambda k: float(k)/100., line.split()))[1])# demand.append(list(map(int, line.split()))[1])
 	
-	# print(np.array(depot_xy).shape)
-	# print(np.array(customer_xy).shape)
-	# print(np.array(demand).shape)
+
 
 	
 	
@@ -107,20 +134,18 @@ if __name__ == '__main__':
 	
 	data = generate_data(device, n_samples = 128, n_customer = 20, seed = 123)
 	for i in range(3):
-	 	print(data[i].dtype)# torch.float32
-	 	print(data[i].size())
-	
-	
+		print(data[i].dtype)# torch.float32
+		print(data[i].size())
 	batch, batch_steps, n_customer = 128, 100000, 20
 	dataset = Generator(device, n_samples = batch*batch_steps, n_customer = n_customer)
-	data = next(iter(dataset))	
-	
+	data = next(iter(dataset))
+
 	dataloader = DataLoader(dataset, batch_size = 128, shuffle = True)
 	print('use datalodaer ...')
 	for i, data in enumerate(dataloader):
 		for j in range(len(data)):
 			print(data[j].dtype)# torch.float32
-			print(data[j].size())	
+			print(data[j].size())
 		if i == 0:
 			break
 
