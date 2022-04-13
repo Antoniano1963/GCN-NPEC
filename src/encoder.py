@@ -1,12 +1,34 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 # from torchsummary import summary
 
-from layers import MultiHeadAttention
-from data import generate_data
-import math
-
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
+class AttentionEncoder(nn.Module):
+    def __init__(self, hidden_dim):
+        super(AttentionEncoder, self).__init__()
+        self.hidden_dim = hidden_dim
+
+    def forward(self, x, neighbor):
+        '''
+        @param x: (batch_size, node_num, hidden_dim)
+        @param neighbor: (batch_size, node_num, k, hidden_dim)
+        '''
+        # scaled dot-product attention
+        x = x.unsqueeze(2)
+        neighbor = neighbor.permute(0, 1, 3, 2)
+        attn_score = F.softmax(torch.matmul(x, neighbor) / np.sqrt(self.hidden_dim),
+                               dim=-1)  # (batch_size, node_num, 1, k)
+        weighted_neighbor = attn_score * neighbor
+
+        # aggregation
+        agg = x.squeeze(2) + torch.sum(weighted_neighbor, dim=-1)
+
+        return agg
+
 
 class GCNLayer(nn.Module):
     def __init__(self,hidden_dim):
@@ -15,7 +37,7 @@ class GCNLayer(nn.Module):
         self.W_node = nn.Linear(hidden_dim, hidden_dim)
         self.V_node_in = nn.Linear(hidden_dim, hidden_dim)
         self.V_node = nn.Linear(2 * hidden_dim, hidden_dim)
-        self.attn = nn.MultiheadAttention(embed_dim = hidden_dim, num_heads = 1)
+        self.attn = AttentionEncoder(hidden_dim)
         self.Relu=nn.ReLU()
         self.Ln1_node = nn.LayerNorm(hidden_dim)
         self.Ln2_node =nn.LayerNorm(hidden_dim)
@@ -59,12 +81,12 @@ class GCNLayer(nn.Module):
         # print("neighbour shape: view: " + str(neighbor.shape))
         #x是key， neighbour 是Key和value 使用了nn的多头注意力模型，但是是当一个注意力层使用的
         # x [batch, node_num, node_dim]
-        att, _ = self.attn(x, neighbor, neighbor)
+        att = self.attn(x, neighbor)
         # att [batch, node_num, node_dim]
         # print("att shape:" + str(att.shape))
         #返回的是 attention后的值 和 attention的权重 att [batch, node_num, hidden_dim]
         out = self.W_node(att)
-        #对应公式9
+        #对应公式9pip
         # out [batch, node_num, hidden_dim]
         h_nb_node = self.Ln1_node(x + self.Relu(out))
         #加入skip-connection 残差连接

@@ -9,28 +9,29 @@ from model import Model
 from baseline import RolloutBaseline
 from data import generate_data, Generator
 from config import Config, load_pkl, train_parser
+import os
 
 
 def train(cfg, log_path = None):
 	torch.backends.cudnn.benchmark = True
-	model = Model(cfg.embed_dim, cfg.n_encode_layers, cfg.n_heads, cfg.tanh_clipping)
+	model = Model(cfg.embed_dim, cfg.n_encode_layers, cfg.n_heads, cfg.tanh_clipping, cfg.n_customer)
 	# model = AttentionModel(cfg.embed_dim, cfg.n_encode_layers, cfg.n_heads, cfg.tanh_clipping)
 	model.train()
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 	model.to(device)
 	baseline = RolloutBaseline(model, cfg.task, cfg.weight_dir, cfg.n_rollout_samples, 
-								cfg.embed_dim, cfg.n_customer, cfg.warmup_beta, cfg.wp_epochs, device)
+								cfg.embed_dim, cfg.n_customer, cfg.warmup_beta, cfg.wp_epochs, device, cfg.batch)
 	optimizer = optim.Adam(model.parameters(), lr = cfg.lr)
 	
 	t1 = time()
 	for epoch in range(cfg.epochs):
-		ave_loss, ave_L = 0., 0.
+		ave_total_loss, ave_seq_loss, avg_cla_loss, avg_cost = 0., 0., 0.,  0.
 		dataset = Generator(device, cfg.batch*cfg.batch_steps, cfg.n_customer)
 		
 		bs = baseline.eval_all(dataset)
 		bs = bs.view(-1, cfg.batch) if bs is not None else None# bs: (cfg.batch_steps, cfg.batch) or None
 		
-		dataloader = DataLoader(dataset, batch_size = cfg.batch, shuffle = True)
+		dataloader = DataLoader(dataset, batch_size=cfg.batch, shuffle=True)
 		for t, inputs in enumerate(tqdm(dataloader)):
 			
 			# loss, L_mean = rein_loss(model, inputs, bs, t, device)
@@ -53,25 +54,29 @@ def train(cfg, log_path = None):
 			nn.utils.clip_grad_norm_(model.parameters(), max_norm = 1.0, norm_type = 2)
 			optimizer.step()
 			
-			ave_loss += loss.item()
-			ave_L += L_mean.item()
+			ave_total_loss += loss.item()
+			ave_seq_loss += se_loss.item()
+			avg_cost += L_mean.item()
+			avg_cla_loss += classification_loss
 			
 			if t%(cfg.batch_verbose) == 0:
 				t2 = time()
-				print('Epoch %d (batch = %d): se_Loss: %1.3f class_Loss: %1.3f L: %1.3f, %dmin%dsec'%(
-					epoch, t, ave_loss/(t+1), ave_L/(t+1), classification_loss/(t+1), (t2-t1)//60, (t2-t1)%60))
+				print('Epoch %d (batch = %d): ave_total_loss: %1.3f ave_seq_loss: %1.3f avg_cla_loss: %1.3f, seq_loss: %1.3f, class_loss: %1.3f, cost: %1.3f %dmin%dsec'%(
+					epoch, t, ave_total_loss/(t+1), ave_seq_loss/(t+1), avg_cla_loss/(t+1), L_mean.item(), classification_loss, avg_cost, (t2-t1)//60, (t2-t1)%60))
 				if cfg.islogger:
 					if log_path is None:
-						log_path = '%s%s_%s.csv'%(cfg.log_dir, cfg.task, cfg.dump_date)#cfg.log_dir = ./Csv/
+						log_path = '%s%s_%s.csv' % (cfg.log_dir, cfg.task, cfg.dump_date)#cfg.log_dir = ./Csv/
 						with open(log_path, 'w') as f:
-							f.write('time,epoch,batch,loss,cost\n')
+							f.write('time,epoch,batch,total_loss,seq_loss, class_loss, cost\n')
 					with open(log_path, 'a') as f:
-						f.write('%dmin%dsec,%d,%d,%1.3f,%1.3f\n'%(
-							(t2-t1)//60, (t2-t1)%60, epoch, t, ave_loss/(t+1), ave_L/(t+1)))
+						f.write('Epoch %d (batch = %d): ave_total_loss: %1.3f ave_seq_loss: %1.3f avg_cla_loss: %1.3f, seq_loss: %1.3f, class_loss: %1.3f, cost: %1.3f %dmin%dsec'%(
+					epoch, t, ave_total_loss/(t+1), ave_seq_loss/(t+1), avg_cla_loss/(t+1), L_mean.item(), classification_loss, avg_cost/(t+1), (t2-t1)//60, (t2-t1)%60))
 				t1 = time()
 
 		baseline.epoch_callback(model, epoch)
-		torch.save(model.state_dict(), '%s%s_epoch%s.pt'%(cfg.weight_dir, cfg.task, epoch))
+		if not os.path.exists('%s%s/%s' % (cfg.weight_dir, cfg.task, cfg.dump_date)):
+			os.makedirs('%s%s/%s' % (cfg.weight_dir, cfg.task, cfg.dump_date))
+		torch.save(model.state_dict(), '%s%s/%s/epoch%s.pt' % (cfg.weight_dir, cfg.task, cfg.dump_date, epoch))
 
 if __name__ == '__main__':
 	cfg = load_pkl(train_parser().path)

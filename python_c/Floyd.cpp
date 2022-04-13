@@ -6,9 +6,8 @@
 #include <iostream>
 #include <string>
 #include <cmath>
-
+#pragma GCC optimize(3)
 using namespace std;
-
 
 
 

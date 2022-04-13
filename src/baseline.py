@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from scipy.stats import ttest_rel
 from tqdm import tqdm
@@ -30,7 +29,7 @@ def load_model(path, embed_dim = 128, n_customer = 20, n_encode_layers = 3):
 
 class RolloutBaseline:
 	def __init__(self, model, task, weight_dir, n_rollout_samples = 10000, 
-				embed_dim = 128, n_customer = 20, warmup_beta = 0.8, wp_epochs = 1, device = 'cpu',
+				embed_dim = 128, n_customer = 20, warmup_beta = 0.8, wp_epochs = 1, device = 'cpu', batch_size = 256,
 				from_checkpoint = False, path_to_checkpoint = None, epoch = 0,
 				):
 		"""
@@ -49,6 +48,7 @@ class RolloutBaseline:
 		self.cur_epoch = epoch
 		self.wp_epochs = wp_epochs
 		self.beta = warmup_beta
+		self.batch_size = batch_size
 
 		# controls the amount of warmup
 		self.alpha = 0.0
@@ -88,7 +88,7 @@ class RolloutBaseline:
 		self.dataset = Generator(self.device, n_samples=self.n_rollout_samples, n_customer=self.n_customer)
 
 		print(f'Evaluating baseline model on baseline dataset (epoch = {epoch})')
-		self.bl_vals = self.rollout(self.model, self.dataset).cpu().numpy()
+		self.bl_vals = self.rollout(self.model, self.dataset, self.batch_size).cpu().numpy()
 		self.mean = self.bl_vals.mean()
 		self.cur_epoch = epoch
 
@@ -125,7 +125,7 @@ class RolloutBaseline:
 		if self.alpha < 1:
 			return None
 
-		val_costs = self.rollout(self.model, dataset, batch = 1024)
+		val_costs = self.rollout(self.model, dataset, batch=self.batch_size)
 
 		return val_costs
 
@@ -135,7 +135,7 @@ class RolloutBaseline:
 		self.cur_epoch = epoch
 
 		print(f'Evaluating candidate model on baseline dataset (callback epoch = {self.cur_epoch})')
-		candidate_vals = self.rollout(model, self.dataset).cpu().numpy()# costs for training model on baseline dataset
+		candidate_vals = self.rollout(model, self.dataset, self.batch_size).cpu().numpy()# costs for training model on baseline dataset
 		candidate_mean = candidate_vals.mean()
 
 		print(f'Epoch {self.cur_epoch} candidate mean {candidate_mean}, baseline mean {self.mean}')
@@ -159,7 +159,7 @@ class RolloutBaseline:
 		new_model = copy.deepcopy(model)
 		return new_model
 
-	def rollout(self, model, dataset, batch=512, disable_tqdm=False):
+	def rollout(self, model, dataset, batch=256, disable_tqdm=False):
 		costs_list = []
 		dataloader = DataLoader(dataset, batch_size=batch)
 		for inputs in tqdm(dataloader, disable=disable_tqdm, desc='Rollout greedy execution'):

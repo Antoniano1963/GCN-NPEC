@@ -8,20 +8,19 @@ from decoder import DecoderCell, ClassificationDecoder, SequencialDecoder
 # class AttentionModel(nn.Module):
 class Model(nn.Module):
 	
-	def __init__(self, embed_dim = 128, n_encode_layers = 3, n_heads = 8, tanh_clipping = 10., FF_hidden = 512):
+	def __init__(self, embed_dim=128, n_encode_layers=3, n_heads=8, tanh_clipping=10, n_custmoer = 20):
 		super().__init__()
-		
-# 		self.Encoder = GraphAttentionEncoder(embed_dim, n_heads, n_encode_layers, FF_hidden)
 		self.Encoder = GCN(embed_dim, embed_dim, embed_dim, embed_dim, n_encode_layers, 5)
 		self.se_Decoder = SequencialDecoder(embed_dim, n_heads, tanh_clipping)
 		self.cl_Decoder = ClassificationDecoder(embed_dim)
+		self.n_customer = n_custmoer
 
 	def to_ground(self, pi):
 		with torch.no_grad():
 			n = len(pi)
-			dist = torch.zeros((n, 21, 21))
+			dist = torch.zeros((n, self.n_customer+1, self.n_customer+1))
 			for num in range(pi.size(0)):      
-				for i in range(21 - 1):
+				for i in range(self.n_customer):
 					dist[num][int(pi[num][i])][int(pi[num][i+1])] = 1
 			return dist
 		
@@ -36,7 +35,9 @@ class Model(nn.Module):
 		cost, ll, pi = se_decoder_output
 		ground = self.to_ground(pi)
 		return cost, ll, pi, ground, cl_decoder_output
-		
+
+
+
 if __name__ == '__main__':
 	model = Model()
 	# model = AttentionModel()
@@ -58,7 +59,3 @@ if __name__ == '__main__':
 		print(i, k.size(), torch.numel(k))
 		cnt += torch.numel(k)
 	print('total parameters:', cnt)
-
-	# output[1].mean().backward()
-	# print(model.Decoder.Wout.weight.grad)
-	# print(model.Encoder.init_W_depot.weight.grad)

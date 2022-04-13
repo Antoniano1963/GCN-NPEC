@@ -39,7 +39,7 @@ def generate_data(device, n_samples = 10, n_customer = 20, seed = None):
 
 	graph = np.random.rand(n_samples, n_customer + 1, 2)
 	dist = np.zeros((n_samples, n_customer + 1, n_customer + 1))
-	# dll = ctypes.cdll.LoadLibrary('./Floyd.so')
+	# dll = ctypes.cdll.LoadLibrary('C:/pycharm/2022Neural_Solver/GCN-NPEC_My/python_c/Floyd.so')
 	# graph_c = graph.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 	# dist_c = dist.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
 	# dll.FloydAlgorithm(graph_c, n_samples, n_customer + 1, dist_c)
@@ -54,7 +54,7 @@ def generate_data(device, n_samples = 10, n_customer = 20, seed = None):
 		100: 50.
 	}
 	depot_xy = graph[0:n_samples, 0, :]
-	customer_xy = graph[0:n_samples, 1:21, :]
+	customer_xy = graph[0:n_samples, 1:n_customer+1, :]
 	# demand = demand[0:n_samples:, 1:21]
 	dist = dist[0:n_samples]
 	return (torch.tensor(np.expand_dims(np.array(depot_xy), axis=0), dtype=torch.float).squeeze(0),
